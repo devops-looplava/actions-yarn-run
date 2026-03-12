@@ -1,0 +1,51 @@
+name: "Yarn Run"
+description: "Checkout, cache node_modules, setup .npmrc for GitHub Packages, install dependencies, and run a yarn command"
+inputs:
+  COMMAND:
+    description: "Yarn command to run (e.g. format, typecheck, test, lint, build, 'audit --severity critical || true')"
+    required: true
+  GITHUB_TOKEN:
+    description: "GitHub token for authenticating to GitHub Packages (npm)"
+    required: true
+  NODE_VERSION:
+    description: "Node.js version to verify (informational only, uses runner's installed version)"
+    required: false
+  NPM_SCOPE:
+    description: "npm scope for GitHub Packages registry (e.g. @onoctave)"
+    required: false
+    default: "@onoctave"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Cache node_modules
+      id: cache
+      uses: actions/cache@v4
+      with:
+        path: node_modules
+        key: ${{ runner.os }}-node-${{ hashFiles('**/yarn.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-node-
+
+    - name: Setup .npmrc
+      shell: bash
+      run: |
+        if [ ! -f .npmrc ]; then
+          echo "${{ inputs.NPM_SCOPE }}:registry=https://npm.pkg.github.com" >> .npmrc
+          echo "//npm.pkg.github.com/:_authToken=\${GITHUB_TOKEN}" >> .npmrc
+        fi
+
+    - name: Install dependencies
+      shell: bash
+      run: yarn install --frozen-lockfile
+      env:
+        GITHUB_TOKEN: ${{ inputs.GITHUB_TOKEN }}
+
+    - name: Run yarn ${{ inputs.COMMAND }}
+      shell: bash
+      run: yarn ${{ inputs.COMMAND }}
+      env:
+        GITHUB_TOKEN: ${{ inputs.GITHUB_TOKEN }}
